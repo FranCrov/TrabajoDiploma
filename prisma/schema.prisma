@@ -1,0 +1,210 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+/**
+ * =========================
+ *   ENTIDADES PRINCIPALES
+ * =========================
+ */
+
+// Empleado (Id_empleado : int, nombre, apellido, direccion, correo_electronico, sueldo)
+// (Campos vistos en el diagrama)
+model Empleado {
+  id_empleado       Int       @id @default(autoincrement())
+  nombre            String    @db.VarChar(30)
+  apellido          String    @db.VarChar(30)
+  direccion         String    @db.VarChar(100)
+  correo_electronico String   @db.VarChar(100)
+  sueldo            Decimal   @db.Decimal(10,2)
+
+  // Relaciones
+  envios            Envio[]   @relation("EmpleadoEnvios")
+  mantenimientos    Mantenimiento[] // si luego tu diagrama lo asocia a vehículo u otra cosa, lo ajustamos
+}
+
+// Cliente (Id_cliente : int, ...)
+// (En el diagrama está la PK Id_cliente y tabla Cliente)
+model Cliente {
+  id_cliente        Int       @id @default(autoincrement())
+  // A falta de más campos legibles en el diagrama, dejo algunos comunes; si tu .txt define otros, los cambio:
+  nombre            String?   @db.VarChar(50)
+  apellido          String?   @db.VarChar(50)
+  direccion         String?   @db.VarChar(100)
+  correo_electronico String?  @db.VarChar(100)
+
+  pedidos           Pedido[]
+  reclamos          Reclamo[]
+}
+
+// Empresa (id_empresa : int)
+// (Tabla y PK vistas)
+model Empresa {
+  id_empresa  Int      @id @default(autoincrement())
+  nombre      String?  @db.VarChar(100)
+
+  prendas     Prenda[]
+}
+
+// Prenda (campos visibles: descripcion, talla, color, FK id_empresa)
+model Prenda {
+  id_prenda   Int       @id @default(autoincrement())
+  descripcion String?   @db.VarChar(100)
+  talla       String?   @db.VarChar(30)
+  color       String?   @db.VarChar(30)
+
+  // FK a Empresa
+  id_empresa  Int?
+  empresa     Empresa?  @relation(fields: [id_empresa], references: [id_empresa], onDelete: SetNull)
+
+  // Relaciones
+  stocks      Stock[]
+  detallePedidos DetallePedido[]
+}
+
+/**
+ * =========================
+ *   OPERACIÓN DE VENTAS
+ * =========================
+ */
+
+// Pedido (id_pedido : int; se ve relación con Cliente y con Reclamo; también aparece en Detalle_envio)
+model Pedido {
+  id_pedido   Int            @id @default(autoincrement())
+
+  // FK a Cliente
+  id_cliente  Int?
+  cliente     Cliente?       @relation(fields: [id_cliente], references: [id_cliente], onDelete: SetNull)
+
+  // Campos típicos; si tu .txt trae otros (fecha, estado, total), los ajusto
+  fecha       DateTime?      @db.Date
+  estado      String?        @db.VarChar(30)
+
+  detalles    DetallePedido[]
+  // Relación 0..1 con Reclamo (desde el diagrama Reclamo ↔ Pedido)
+  reclamo     Reclamo?
+  // N..M con Envio mediante Detalle_envio
+  detalleEnvios Detalle_envio[]
+}
+
+// DetallePedido (tabla intermedia Pedido-Prenda con cantidades/precio)
+model DetallePedido {
+  id_detalle_pedido Int      @id @default(autoincrement())
+
+  id_pedido         Int
+  pedido            Pedido   @relation(fields: [id_pedido], references: [id_pedido], onDelete: Cascade)
+
+  id_prenda         Int
+  prenda            Prenda   @relation(fields: [id_prenda], references: [id_prenda], onDelete: Restrict)
+
+  cantidad          Int
+  precioUnitario    Decimal  @db.Decimal(10,2)
+
+  @@index([id_pedido])
+  @@index([id_prenda])
+  @@unique([id_pedido, id_prenda]) // típica restricción para no repetir prenda en el mismo pedido
+}
+
+/**
+ * =========================
+ *   STOCK / INVENTARIO
+ * =========================
+ */
+
+// Stock (campos visibles: cantidadDisponible, stockMinimo, stockMaximo, FK a Prenda)
+model Stock {
+  id_stock            Int     @id @default(autoincrement())
+
+  id_prenda           Int
+  prenda              Prenda  @relation(fields: [id_prenda], references: [id_prenda], onDelete: Cascade)
+
+  cantidadDisponible  Int
+  stockMinimo         Int
+  stockMaximo         Int
+
+  @@index([id_prenda])
+}
+
+/**
+ * =========================
+ *   ENVÍOS Y LOGÍSTICA
+ * =========================
+ */
+
+// Envio (id_envio : int, FK Id_empleadoEnvio, fecha_despacho)
+model Envio {
+  id_envio          Int        @id @default(autoincrement())
+
+  // FK al Empleado responsable del envío
+  Id_empleadoEnvio  Int?
+  empleadoEnvio     Empleado?  @relation("EmpleadoEnvios", fields: [Id_empleadoEnvio], references: [id_empleado], onDelete: SetNull)
+
+  fecha_despacho    DateTime?  @db.Date
+  estado_envio      String?    @db.VarChar(30)
+
+  // N..M con Pedido mediante Detalle_envio
+  detalleEnvios     Detalle_envio[]
+}
+
+// Detalle_envio (N..M entre Envio y Pedido, aparece como tabla en el diagrama)
+model Detalle_envio {
+  id_detalle_envio Int     @id @default(autoincrement())
+
+  id_envio         Int
+  envio            Envio   @relation(fields: [id_envio], references: [id_envio], onDelete: Cascade)
+
+  id_pedido        Int
+  pedido           Pedido  @relation(fields: [id_pedido], references: [id_pedido], onDelete: Cascade)
+
+  fecha_entrega    DateTime? @db.Date
+  estado           String?   @db.VarChar(30)
+
+  @@index([id_envio])
+  @@index([id_pedido])
+  @@unique([id_envio, id_pedido]) // un pedido no debería estar repetido dentro del mismo envío
+}
+
+/**
+ * =========================
+ *   SERVICIO AL CLIENTE
+ * =========================
+ */
+
+// Reclamo (tabla y relación con Pedido visibles en el diagrama)
+model Reclamo {
+  id_reclamo  Int      @id @default(autoincrement())
+
+  id_pedido   Int?     @unique
+  pedido      Pedido?  @relation(fields: [id_pedido], references: [id_pedido], onDelete: SetNull)
+
+  descripcion String?  @db.VarChar(100)
+  fecha       DateTime? @db.Date
+
+  // Opcional: si quieres asociarlo al cliente explícitamente:
+  id_cliente  Int?
+  cliente     Cliente? @relation(fields: [id_cliente], references: [id_cliente], onDelete: SetNull)
+}
+
+/**
+ * =========================
+ *   MANTENIMIENTO
+ * =========================
+ */
+
+// Mantenimiento (Id_Mantenimiento : int, descripcion)
+model Mantenimiento {
+  Id_Mantenimiento Int     @id @default(autoincrement())
+  descripcion      String? @db.VarChar(100)
+
+  // Si en tu .txt se relaciona con Empleado, Vehículo u otra entidad, acá agregamos la FK exacta.
+}
