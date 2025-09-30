@@ -11,7 +11,8 @@ model cliente {
   id_cliente         Int            @id @default(autoincrement())
   clerkId            String?        @unique(map: "Cliente_clerkId_key")
   nombre             String         @db.VarChar(30)
-  direccion          String?         @db.VarChar(100)
+  apellido           String?        @db.VarChar(30)   
+  direccion          String?        @db.VarChar(100)
   correo_electronico String         @unique(map: "Cliente_correo_electronico_key") @db.VarChar(100)
   telefono Int?
   dni      Int?
