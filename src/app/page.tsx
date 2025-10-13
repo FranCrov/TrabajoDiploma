@@ -14,13 +14,11 @@ export default function Home() {
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      router.replace("/menu");
+      router.replace("/client"); // redirige al cliente si está logueado
     }
   }, [isLoaded, isSignedIn, router]);
 
-  if (!isLoaded || isSignedIn) {
-    return null;
-  }
+  if (!isLoaded || isSignedIn) return null;
 
   return (
     <div
