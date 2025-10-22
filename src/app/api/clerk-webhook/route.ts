@@ -5,26 +5,19 @@ import prisma from "@/lib/prisma";
 
 export async function POST(req: Request) {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
-  if (!WEBHOOK_SECRET) {
-    throw new Error("⚠️ Falta CLERK_WEBHOOK_SECRET en .env");
-  }
+  if (!WEBHOOK_SECRET) throw new Error("⚠️ Falta CLERK_WEBHOOK_SECRET en .env");
 
-  // Verificación de firma
   const headerPayload = await headers();
   const svix_id = headerPayload.get("svix-id");
   const svix_timestamp = headerPayload.get("svix-timestamp");
   const svix_signature = headerPayload.get("svix-signature");
 
   if (!svix_id || !svix_timestamp || !svix_signature) {
-    return NextResponse.json(
-      { error: "Cabeceras de webhook inválidas" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Cabeceras inválidas" }, { status: 400 });
   }
 
   const payload = await req.json();
   const body = JSON.stringify(payload);
-
   const wh = new Webhook(WEBHOOK_SECRET);
 
   let evt: any;
@@ -40,63 +33,52 @@ export async function POST(req: Request) {
   }
 
   const eventType = evt.type;
-  console.log("📩 Evento de Clerk:", eventType);
+  console.log("📩 Evento Clerk:", eventType);
 
-  // -------------------
+  // ------------------------------
   // Crear/Actualizar usuario
-  // -------------------
+  // ------------------------------
   if (eventType === "user.created" || eventType === "user.updated") {
     const { id, email_addresses, first_name, last_name } = evt.data;
     const email = email_addresses[0].email_address.toLowerCase();
 
+    const usuario = await prisma.usuario.upsert({
+      where: { clerkId: id },
+      update: {
+        nombre: first_name || "Sin nombre",
+        apellido: last_name || "Sin apellido",
+        correo_electronico: email,
+      },
+      create: {
+        clerkId: id,
+        nombre: first_name || "Sin nombre",
+        apellido: last_name || "Sin apellido",
+        correo_electronico: email,
+      },
+    });
+
     if (email.endsWith("@smarthclothes.com")) {
-      // EMPLEADO
       await prisma.empleado.upsert({
-        where: { clerkId: id },
-        update: {
-          nombre: first_name || "Sin nombre",
-          apellido: last_name || "Sin apellido",
-          correo_electronico: email,
-        },
-        create: {
-          clerkId: id,
-          nombre: first_name || "Sin nombre",
-          apellido: last_name || "Sin apellido",
-          correo_electronico: email,
-          direccion: "",
-          telefono: null,
-          dni: null,
-          sueldo: 0,
-        },
+        where: { id_usuario: usuario.id_usuario },
+        update: {},
+        create: { id_usuario: usuario.id_usuario, sueldo: 0 },
       });
     } else {
-      // CLIENTE
       await prisma.cliente.upsert({
-        where: { clerkId: id },
-        update: {
-          nombre: first_name || "Sin nombre",
-          apellido: last_name || "Sin apellido",
-          correo_electronico: email,
-        },
-        create: {
-          clerkId: id,
-          nombre: first_name || "Sin nombre",
-          apellido: last_name || "Sin apellido",
-          correo_electronico: email,
-          direccion: "",
-          telefono: null,
-          dni: null,
-        },
+        where: { id_usuario: usuario.id_usuario },
+        update: {},
+        create: { id_usuario: usuario.id_usuario },
       });
     }
   }
 
-  // -------------------
-  // Usuario que inicia sesión (aseguramos que exista en DB)
-  // -------------------
+  // ------------------------------
+  // Usuario inicia sesión → aseguramos que exista
+  // ------------------------------
   if (eventType === "session.created") {
     const { user_id } = evt.data;
 
+    // Traemos los datos de Clerk
     const userResp = await fetch(`https://api.clerk.dev/v1/users/${user_id}`, {
       headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` },
     });
@@ -106,53 +88,41 @@ export async function POST(req: Request) {
     const first_name = userData.first_name;
     const last_name = userData.last_name;
 
-    if (email.endsWith("@smarthclothes.com")) {
-      await prisma.empleado.upsert({
-        where: { clerkId: user_id },
-        update: {
-          nombre: first_name || "Sin nombre",
-          apellido: last_name || "Sin apellido",
-          correo_electronico: email,
-        },
-        create: {
+    // Si no existe en BD, lo creamos
+    let usuario = await prisma.usuario.findUnique({ where: { clerkId: user_id } });
+    if (!usuario) {
+      usuario = await prisma.usuario.create({
+        data: {
           clerkId: user_id,
           nombre: first_name || "Sin nombre",
           apellido: last_name || "Sin apellido",
           correo_electronico: email,
-          direccion: "",
-          telefono: null,
-          dni: null,
-          sueldo: 0,
         },
       });
-    } else {
-      await prisma.cliente.upsert({
-        where: { clerkId: user_id },
-        update: {
-          nombre: first_name || "Sin nombre",
-          apellido: last_name || "Sin apellido",
-          correo_electronico: email,
-        },
-        create: {
-          clerkId: user_id,
-          nombre: first_name || "Sin nombre",
-          apellido: last_name || "Sin apellido",
-          correo_electronico: email,
-          direccion: "",
-          telefono: null,
-          dni: null,
-        },
-      });
+
+      if (email.endsWith("@smarthclothes.com")) {
+        await prisma.empleado.create({
+          data: { id_usuario: usuario.id_usuario, sueldo: 0 },
+        });
+      } else {
+        await prisma.cliente.create({
+          data: { id_usuario: usuario.id_usuario },
+        });
+      }
     }
   }
 
-  // -------------------
-  // Usuario borrado
-  // -------------------
+  // ------------------------------
+  // Usuario eliminado
+  // ------------------------------
   if (eventType === "user.deleted") {
     const { id } = evt.data;
-    await prisma.empleado.deleteMany({ where: { clerkId: id } });
-    await prisma.cliente.deleteMany({ where: { clerkId: id } });
+    const usuario = await prisma.usuario.findUnique({ where: { clerkId: id } });
+    if (usuario) {
+      await prisma.empleado.deleteMany({ where: { id_usuario: usuario.id_usuario } });
+      await prisma.cliente.deleteMany({ where: { id_usuario: usuario.id_usuario } });
+      await prisma.usuario.delete({ where: { id_usuario: usuario.id_usuario } });
+    }
   }
 
   return NextResponse.json({ ok: true });
