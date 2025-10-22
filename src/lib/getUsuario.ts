@@ -2,30 +2,20 @@ import { currentUser } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
 
 export async function getUsuario() {
-  console.log("Entrando a getUsuario...");
-
   const user = await currentUser();
-  console.log("Usuario actual de Clerk:", user);
-
-  if (!user) {
-    throw new Error("No hay sesión activa");
-  }
+  if (!user) throw new Error("No hay sesión activa");
 
   const email = user.emailAddresses[0].emailAddress.toLowerCase();
 
-  let tipo: "cliente" | "empleado" = "cliente";
-  let registro = null;
+  // Buscamos el usuario general
+  const usuario = await prisma.usuario.findUnique({
+    where: { clerkId: user.id },
+    include: { empleado: true, cliente: true },
+  });
 
-  if (email.endsWith("@smarthclothes.com")) {
-    tipo = "empleado";
-    registro = await prisma.empleado.findUnique({ where: { clerkId: user.id } });
-  } else {
-    registro = await prisma.cliente.findUnique({ where: { clerkId: user.id } });
-  }
+  if (!usuario) return null;
 
-  if (!registro) {
-    console.warn("⚠️ El usuario existe en Clerk pero no en DB (revisar webhook)");
-  }
+  const tipo = usuario.empleado ? "empleado" : "cliente";
 
-  return { tipo, clerkId: user.id, data: registro };
+  return { tipo, clerkId: user.id, data: usuario };
 }

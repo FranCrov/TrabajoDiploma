@@ -7,122 +7,118 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model cliente {
-  id_cliente         Int            @id @default(autoincrement())
-  clerkId            String?        @unique(map: "Cliente_clerkId_key")
-  nombre             String         @db.VarChar(30)
-  apellido           String?        @db.VarChar(30)   
-  direccion          String?        @db.VarChar(100)
-  correo_electronico String         @unique(map: "Cliente_correo_electronico_key") @db.VarChar(100)
-  telefono Int?
-  dni      Int?
-  envio              envio[]
-  notificacion       notificacion[]
-  pedido             pedido[]
-  reclamo            reclamo[]
+//
+// ──────────────────────────── ENTIDADES DE USUARIO Y GRUPOS ────────────────────────────
+//
+
+model usuario {
+  id_usuario         Int              @id @default(autoincrement())
+  clerkId            String?          @unique
+  nombre             String           @db.VarChar(30)
+  apellido           String?          @db.VarChar(30)
+  direccion          String?          @db.VarChar(100)
+  correo_electronico String           @unique @db.VarChar(100)
+  telefono           Int?
+  dni                Int?
+
+  // Relaciones 1:1 con empleado y cliente
+  empleado           empleado?
+  cliente            cliente?
+
+  // Relaciones con grupos (N:M)
+  grupo_usuario      grupo_usuario[]
 }
+
+model grupo {
+  id_grupo      Int             @id @default(autoincrement())
+  nombre        String          @db.VarChar(50)
+  descripcion   String?         @db.VarChar(100)
+  grupo_accion  grupo_accion[]
+  grupo_usuario grupo_usuario[]
+}
+
+model accion {
+  id_accion     Int             @id @default(autoincrement())
+  nombre        String          @db.VarChar(50)
+  descripcion   String?         @db.VarChar(100)
+  grupo_accion  grupo_accion[]
+}
+
+model grupo_accion {
+  id_grupo_accion Int    @id @default(autoincrement())
+  id_grupo        Int
+  id_accion       Int
+
+  grupo           grupo  @relation(fields: [id_grupo], references: [id_grupo])
+  accion          accion @relation(fields: [id_accion], references: [id_accion])
+
+  @@index([id_grupo])
+  @@index([id_accion])
+}
+
+model grupo_usuario {
+  id_grupo_usuario Int     @id @default(autoincrement())
+  id_usuario       Int
+  id_grupo         Int
+
+  usuario          usuario @relation(fields: [id_usuario], references: [id_usuario])
+  grupo            grupo   @relation(fields: [id_grupo], references: [id_grupo])
+
+  @@index([id_usuario])
+  @@index([id_grupo])
+}
+
+//
+// ──────────────────────────── ENTIDADES PRINCIPALES ────────────────────────────
+//
 
 model empleado {
-  id_empleado        Int              @id @default(autoincrement())
-  clerkId            String?          @unique(map: "Empleado_clerkId_key")
-  nombre             String           @db.VarChar(30)
-  apellido           String           @db.VarChar(30)
-  direccion          String?           @db.VarChar(100)
-  correo_electronico String           @unique(map: "Empleado_correo_electronico_key") @db.VarChar(100)
-  telefono Int?
-  dni      Int?
-  sueldo   Decimal?
-  empleado_envio     empleado_envio[]
+  id_empleado  Int        @id @default(autoincrement())
+  id_usuario   Int        @unique
+  sueldo       Decimal?   @db.Decimal(10,2)
+  disponible   Boolean?   @default(true)
+
+  usuario      usuario    @relation(fields: [id_usuario], references: [id_usuario])
+  envios       envio[]
+  vehiculos    vehiculo[]
 }
 
-model detalle_envio {
-  id_detalleEnvio   Int      @id @default(autoincrement())
-  costo_total       Decimal  @db.Decimal(10, 2)
-  distancia         Decimal  @db.Decimal(10, 2)
-  fecha_despacho    DateTime @db.Date
-  direcci_n_entrega String   @map("dirección_entrega") @db.VarChar(100)
-  envio             envio[]
-}
+model cliente {
+  id_cliente   Int        @id @default(autoincrement())
+  id_usuario   Int        @unique
 
-model detallefactura {
-  id_detalleFactura Int       @id @default(autoincrement())
-  id_prenda         Int
-  cantidad          Int
-  precio_unitario   Decimal   @db.Decimal(10, 2)
-  total             Decimal   @db.Decimal(10, 2)
-  prenda            prenda    @relation(fields: [id_prenda], references: [id_prenda], map: "DetalleFactura_id_prenda_fkey")
-  factura           factura[]
-
-  @@index([id_prenda], map: "DetalleFactura_id_prenda_fkey")
-}
-
-model detallepedido {
-  id_detallePedido Int      @id @default(autoincrement())
-  id_prenda        Int
-  cantidad         Int
-  precio_unitario  Decimal  @db.Decimal(10, 2)
-  sub_total        Decimal  @db.Decimal(10, 2)
-  prenda           prenda   @relation(fields: [id_prenda], references: [id_prenda], map: "DetallePedido_id_prenda_fkey")
-  pedido           pedido[]
-
-  @@index([id_prenda], map: "DetallePedido_id_prenda_fkey")
-}
-
-
-
-model empleado_envio {
-  id_empleadoEnvio Int      @id @default(autoincrement())
-  id_empleado      Int
-  id_rol           Int
-  empleado         empleado @relation(fields: [id_empleado], references: [id_empleado], map: "Empleado_Envio_id_empleado_fkey")
-  rol              rol      @relation(fields: [id_rol], references: [id_rol], map: "Empleado_Envio_id_rol_fkey")
-  envio            envio[]
-
-  @@index([id_empleado], map: "Empleado_Envio_id_empleado_fkey")
-  @@index([id_rol], map: "Empleado_Envio_id_rol_fkey")
+  usuario      usuario    @relation(fields: [id_usuario], references: [id_usuario])
+  pedidos      pedido[]
+  notificaciones notificacion[]
+  reclamos     reclamo[]
+  envios       envio[] // 👈 Agregada relación inversa con envio
 }
 
 model empresa {
-  id_empresa Int      @id @default(autoincrement())
-  nombre     String   @db.VarChar(30)
-  direccion  String   @db.VarChar(100)
-  pedido     pedido[]
-  prenda     prenda[]
+  id_empresa Int       @id @default(autoincrement())
+  nombre     String    @db.VarChar(30)
+  direccion  String    @db.VarChar(100)
+  pedidos    pedido[]
+  prendas    prenda[]
 }
 
-model envio {
-  id_envio         Int            @id @default(autoincrement())
-  id_empleadoEnvio Int
-  id_pedido        Int
-  id_vehiculo      Int
-  id_cliente       Int
-  id_detalleEnvio  Int
-  estado           String         @db.VarChar(100)
-  fecha_despacho   DateTime       @db.Date
-  cliente          cliente        @relation(fields: [id_cliente], references: [id_cliente], map: "Envio_id_cliente_fkey")
-  detalle_envio    detalle_envio  @relation(fields: [id_detalleEnvio], references: [id_detalleEnvio], map: "Envio_id_detalleEnvio_fkey")
-  empleado_envio   empleado_envio @relation(fields: [id_empleadoEnvio], references: [id_empleadoEnvio], map: "Envio_id_empleadoEnvio_fkey")
-  pedido           pedido         @relation(fields: [id_pedido], references: [id_pedido], map: "Envio_id_pedido_fkey")
-  vehiculo         vehiculo       @relation(fields: [id_vehiculo], references: [id_vehiculo], map: "Envio_id_vehiculo_fkey")
+//
+// ──────────────────────────── LOGÍSTICA Y OPERACIONES ────────────────────────────
+//
 
-  @@index([id_cliente], map: "Envio_id_cliente_fkey")
-  @@index([id_detalleEnvio], map: "Envio_id_detalleEnvio_fkey")
-  @@index([id_empleadoEnvio], map: "Envio_id_empleadoEnvio_fkey")
-  @@index([id_pedido], map: "Envio_id_pedido_fkey")
-  @@index([id_vehiculo], map: "Envio_id_vehiculo_fkey")
-}
+model vehiculo {
+  id_vehiculo      Int           @id @default(autoincrement())
+  id_empleado      Int
+  id_mantenimiento Int
+  modelo           String        @db.VarChar(100)
+  capacidad_peso   Decimal       @db.Decimal(10, 2)
 
-model factura {
-  id_factura        Int            @id @default(autoincrement())
-  id_detalleFactura Int
-  id_pedido         Int
-  fecha_emision     DateTime       @db.Date
-  metodo_pago       String         @db.VarChar(30)
-  detallefactura    detallefactura @relation(fields: [id_detalleFactura], references: [id_detalleFactura], map: "Factura_id_detalleFactura_fkey")
-  pedido            pedido         @relation(fields: [id_pedido], references: [id_pedido], map: "Factura_id_pedido_fkey")
+  mantenimiento    mantenimiento @relation(fields: [id_mantenimiento], references: [id_mantenimiento])
+  empleado         empleado      @relation(fields: [id_empleado], references: [id_empleado])
+  envios           envio[]
 
-  @@index([id_detalleFactura], map: "Factura_id_detalleFactura_fkey")
-  @@index([id_pedido], map: "Factura_id_pedido_fkey")
+  @@index([id_empleado])
+  @@index([id_mantenimiento])
 }
 
 model mantenimiento {
@@ -131,21 +127,44 @@ model mantenimiento {
   fecha            DateTime   @db.Date
   costo            Decimal    @db.Decimal(10, 2)
   descripcion      String     @db.VarChar(100)
-  vehiculo         vehiculo[]
+  vehiculos        vehiculo[]
 }
 
-model notificacion {
-  id_notificacion    Int      @id @default(autoincrement())
-  id_cliente         Int
-  id_pedido          Int
-  fecha_envio        DateTime @db.DateTime(0)
-  correo_electronico String   @db.VarChar(100)
-  cliente            cliente  @relation(fields: [id_cliente], references: [id_cliente], map: "Notificacion_id_cliente_fkey")
-  pedido             pedido   @relation(fields: [id_pedido], references: [id_pedido], map: "Notificacion_id_pedido_fkey")
-
-  @@index([id_cliente], map: "Notificacion_id_cliente_fkey")
-  @@index([id_pedido], map: "Notificacion_id_pedido_fkey")
+model detalle_envio {
+  id_detalleEnvio   Int      @id @default(autoincrement())
+  costo_total       Decimal  @db.Decimal(10, 2)
+  distancia         Decimal  @db.Decimal(10, 2)
+  fecha_despacho    DateTime @db.Date
+  direccion_entrega String   @db.VarChar(100)
+  envios            envio[]
 }
+
+model envio {
+  id_envio         Int            @id @default(autoincrement())
+  id_empleado      Int
+  id_pedido        Int
+  id_vehiculo      Int
+  id_cliente       Int
+  id_detalleEnvio  Int
+  estado           String         @db.VarChar(100)
+  fecha_despacho   DateTime       @db.Date
+
+  cliente          cliente        @relation(fields: [id_cliente], references: [id_cliente])
+  detalle_envio    detalle_envio  @relation(fields: [id_detalleEnvio], references: [id_detalleEnvio])
+  empleado         empleado       @relation(fields: [id_empleado], references: [id_empleado])
+  pedido           pedido         @relation(fields: [id_pedido], references: [id_pedido])
+  vehiculo         vehiculo       @relation(fields: [id_vehiculo], references: [id_vehiculo])
+
+  @@index([id_cliente])
+  @@index([id_detalleEnvio])
+  @@index([id_empleado])
+  @@index([id_pedido])
+  @@index([id_vehiculo])
+}
+
+//
+// ──────────────────────────── PEDIDOS Y FACTURAS ────────────────────────────
+//
 
 model pedido {
   id_pedido        Int            @id @default(autoincrement())
@@ -155,18 +174,64 @@ model pedido {
   estado           String         @db.VarChar(100)
   fecha_pedido     DateTime       @db.Date
   cantidad         Int
-  envio            envio[]
-  factura          factura[]
-  notificacion     notificacion[]
-  cliente          cliente        @relation(fields: [id_cliente], references: [id_cliente], map: "Pedido_id_cliente_fkey")
-  detallepedido    detallepedido  @relation(fields: [id_detallePedido], references: [id_detallePedido], map: "Pedido_id_detallePedido_fkey")
-  empresa          empresa        @relation(fields: [id_empresa], references: [id_empresa], map: "Pedido_id_empresa_fkey")
-  reclamo          reclamo[]
 
-  @@index([id_cliente], map: "Pedido_id_cliente_fkey")
-  @@index([id_detallePedido], map: "Pedido_id_detallePedido_fkey")
-  @@index([id_empresa], map: "Pedido_id_empresa_fkey")
+  envios           envio[]
+  facturas         factura[]
+  notificaciones   notificacion[]
+  reclamos         reclamo[]
+
+  cliente          cliente        @relation(fields: [id_cliente], references: [id_cliente])
+  detallepedido    detallepedido  @relation(fields: [id_detallePedido], references: [id_detallePedido])
+  empresa          empresa        @relation(fields: [id_empresa], references: [id_empresa])
+
+  @@index([id_cliente])
+  @@index([id_detallePedido])
+  @@index([id_empresa])
 }
+
+model detallepedido {
+  id_detallePedido Int      @id @default(autoincrement())
+  id_prenda        Int
+  cantidad         Int
+  precio_unitario  Decimal  @db.Decimal(10, 2)
+  sub_total        Decimal  @db.Decimal(10, 2)
+
+  prenda           prenda   @relation(fields: [id_prenda], references: [id_prenda])
+  pedidos          pedido[]
+
+  @@index([id_prenda])
+}
+
+model factura {
+  id_factura        Int            @id @default(autoincrement())
+  id_detalleFactura Int
+  id_pedido         Int
+  fecha_emision     DateTime       @db.Date
+  metodo_pago       String         @db.VarChar(30)
+
+  detallefactura    detallefactura @relation(fields: [id_detalleFactura], references: [id_detalleFactura])
+  pedido            pedido         @relation(fields: [id_pedido], references: [id_pedido])
+
+  @@index([id_detalleFactura])
+  @@index([id_pedido])
+}
+
+model detallefactura {
+  id_detalleFactura Int       @id @default(autoincrement())
+  id_prenda         Int
+  cantidad          Int
+  precio_unitario   Decimal   @db.Decimal(10, 2)
+  total             Decimal   @db.Decimal(10, 2)
+
+  prenda            prenda    @relation(fields: [id_prenda], references: [id_prenda])
+  facturas          factura[]
+
+  @@index([id_prenda])
+}
+
+//
+// ──────────────────────────── INVENTARIO Y PRENDAS ────────────────────────────
+//
 
 model prenda {
   id_prenda      Int              @id @default(autoincrement())
@@ -175,11 +240,42 @@ model prenda {
   talla          String           @db.VarChar(30)
   color          String           @db.VarChar(30)
   precio         Decimal          @db.Decimal(10, 2)
+
+  stock          stock?
   detallefactura detallefactura[]
   detallepedido  detallepedido[]
-  empresa        empresa          @relation(fields: [id_empresa], references: [id_empresa], map: "Prenda_id_empresa_fkey")
+  empresa        empresa          @relation(fields: [id_empresa], references: [id_empresa])
 
-  @@index([id_empresa], map: "Prenda_id_empresa_fkey")
+  @@index([id_empresa])
+}
+
+model stock {
+  id_stock              Int      @id @default(autoincrement())
+  id_prenda             Int      @unique // 👈 relación 1:1 corregida
+  cantidadDisponible    Int
+  stockMinimo           Int
+  stockMaximo           Int
+  fechaUltimaReposicion DateTime @db.Date
+
+  prenda                prenda   @relation(fields: [id_prenda], references: [id_prenda])
+}
+
+//
+// ──────────────────────────── RECLAMOS Y NOTIFICACIONES ────────────────────────────
+//
+
+model notificacion {
+  id_notificacion    Int      @id @default(autoincrement())
+  id_cliente         Int
+  id_pedido          Int
+  fecha_envio        DateTime @db.DateTime(0)
+  correo_electronico String   @db.VarChar(100)
+
+  cliente            cliente  @relation(fields: [id_cliente], references: [id_cliente])
+  pedido             pedido   @relation(fields: [id_pedido], references: [id_pedido])
+
+  @@index([id_cliente])
+  @@index([id_pedido])
 }
 
 model reclamo {
@@ -189,35 +285,10 @@ model reclamo {
   descripcion String   @db.VarChar(100)
   fecha       DateTime @db.Date
   estado      String   @db.VarChar(30)
-  cliente     cliente  @relation(fields: [id_cliente], references: [id_cliente], map: "Reclamo_id_cliente_fkey")
-  pedido      pedido   @relation(fields: [id_pedido], references: [id_pedido], map: "Reclamo_id_pedido_fkey")
 
-  @@index([id_cliente], map: "Reclamo_id_cliente_fkey")
-  @@index([id_pedido], map: "Reclamo_id_pedido_fkey")
-}
+  cliente     cliente  @relation(fields: [id_cliente], references: [id_cliente])
+  pedido      pedido   @relation(fields: [id_pedido], references: [id_pedido])
 
-model rol {
-  id_rol         Int              @id @default(autoincrement())
-  nombre         String           @db.VarChar(100)
-  descripcion    String           @db.VarChar(100)
-  empleado_envio empleado_envio[]
-}
-
-model stock {
-  id_stock              Int      @id @default(autoincrement())
-  cantidadDisponible    Int
-  stockMinimo           Int
-  stockMaximo           Int
-  fechaUltimaReposicion DateTime @db.Date
-}
-
-model vehiculo {
-  id_vehiculo      Int           @id @default(autoincrement())
-  id_mantenimiento Int
-  modelo           String        @db.VarChar(100)
-  capacidad_peso   Decimal       @db.Decimal(10, 2)
-  envio            envio[]
-  mantenimiento    mantenimiento @relation(fields: [id_mantenimiento], references: [id_mantenimiento], map: "Vehiculo_id_mantenimiento_fkey")
-
-  @@index([id_mantenimiento], map: "Vehiculo_id_mantenimiento_fkey")
+  @@index([id_cliente])
+  @@index([id_pedido])
 }
