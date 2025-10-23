@@ -1,4 +1,6 @@
 import { type Metadata } from 'next'
+import SyncUser from '@/lib/SyncUser'
+
 import {
   ClerkProvider,
   SignInButton,
@@ -44,6 +46,7 @@ export default function RootLayout({
               </SignUpButton>
             </SignedOut>
             <SignedIn>
+              <SyncUser/>
               <UserButton />
             </SignedIn>
           </header>
